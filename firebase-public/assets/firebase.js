@@ -4,7 +4,7 @@ import {
   orderBy, query, setDoc, writeBatch,
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 import {
-  getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut,
+  getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithRedirect, signOut,
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
 
 const firebaseConfig = {
@@ -75,7 +75,7 @@ export function observeAuth(callback) {
 export async function loginWithGoogle() {
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ login_hint: ADMIN_EMAIL, prompt:"select_account" });
-  return signInWithPopup(auth, provider);
+  return signInWithRedirect(auth, provider);
 }
 
 export function logout() { return signOut(auth); }
@@ -131,3 +131,4 @@ export async function removeProject(id) {
   batch.delete(doc(db, "publishedProjects", id));
   await batch.commit();
 }
+
