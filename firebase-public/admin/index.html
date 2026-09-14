@@ -5,7 +5,7 @@
   <title>Administrador | Gabriel Desarrollo Web</title><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/assets/styles.css">
 </head>
 <body>
-<main id="auth-view" class="auth-shell"><section class="auth-card"><span class="brand-mark">G</span><h1>Panel privado</h1><p>Accede con la cuenta de Google autorizada para administrar el portafolio.</p><button id="login-button" class="button-primary">Continuar con Google</button><p id="auth-error" class="auth-error" aria-live="polite"></p><a href="/" class="admin-back">← Volver al sitio</a></section></main>
+<main id="auth-view" class="auth-shell"><section class="auth-card"><span class="brand-mark">G</span><h1>Panel privado</h1><p>Accede con la cuenta de Google autorizada para administrar el portafolio.</p><button id="login-button" class="button-primary">Continuar con Google</button><p class="auth-help">En teléfonos, abre este panel directamente en Chrome, Safari o Firefox.</p><p id="auth-error" class="auth-error" aria-live="polite"></p><a href="/" class="admin-back">← Volver al sitio</a></section></main>
 
 <main id="admin-view" class="admin-shell" hidden>
   <header class="admin-header"><a href="/" class="admin-back">← Ver sitio</a><div><b>Gabriel | Administrador</b><span id="admin-user"></span></div><button id="logout-button" class="admin-signout">Cerrar sesión</button></header>
@@ -22,6 +22,7 @@
 </main>
 
 <dialog id="project-dialog" class="admin-dialog"><div class="admin-dialog-head"><div><h2>Información del proyecto</h2><p>Completa los datos que aparecerán en la tarjeta y la vista ampliada.</p></div><button id="project-cancel" class="admin-dialog-close" aria-label="Cerrar">×</button></div><div class="project-form-grid"><label class="admin-field"><span>Nombre del proyecto</span><input id="project-title"></label><label class="admin-field"><span>Estado</span><select id="project-status"><option>Demostración</option><option>Proyecto académico</option><option>En desarrollo</option><option>Terminado</option></select></label><label class="admin-field wide"><span>Descripción corta</span><textarea id="project-short" rows="2"></textarea></label><label class="admin-field wide"><span>Descripción completa</span><textarea id="project-description" rows="5"></textarea></label><label class="admin-field wide"><span>Tecnologías, separadas por coma</span><input id="project-tech"></label><label class="admin-field wide"><span>Enlace del proyecto</span><input id="project-url" type="url" placeholder="https://..."></label><label class="admin-field wide"><span>Dirección de la imagen</span><input id="project-image" type="url" placeholder="https://... o /nombre-imagen.png"></label><p class="free-image-note">En el plan gratuito puedes utilizar una imagen incluida en el sitio o pegar la dirección pública de una imagen. Firebase Storage requiere Blaze.</p><img id="project-preview" class="project-cover-preview" alt="Vista previa"><label class="publish-row"><input id="project-published" type="checkbox"><span><b>Proyecto publicado</b><small>Si lo desactivas, quedará guardado como borrador.</small></span></label></div><p id="project-form-error" class="auth-error" aria-live="polite"></p><button id="project-save" class="admin-save">Guardar proyecto</button></dialog>
-<script type="module" src="/assets/admin.js"></script>
+<script type="module" src="/assets/admin.js?v=20260914-1"></script>
 </body>
 </html>
+
