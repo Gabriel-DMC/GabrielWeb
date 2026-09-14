@@ -1,16 +1,30 @@
 import {
-  ADMIN_EMAIL, isAdmin, loadAdminData, loginWithGoogle, logout, observeAuth,
-  removeProject, saveContent, saveProject, seedDefaultsIfEmpty,
-} from "./firebase.js?v=20260914-1";
+  ADMIN_EMAIL, isAdmin, loadAdminData, loginWithEmail, logout, observeAuth,
+  removeProject, resetAdminPassword, saveContent, saveProject, seedDefaultsIfEmpty,
+} from "./firebase.js?v=20260914-2";
 
 let state = { profile:{}, services:[], projects:[] };
 let draft = null;
 const $ = (selector) => document.querySelector(selector);
 const text = (selector, value) => { const node=$(selector); if (node) node.textContent=value; };
 
-$("#login-button").addEventListener("click", async () => {
-  text("#auth-error", "Abriendo el acceso seguro de Google…");
-  try { await loginWithGoogle(); } catch (error) { text("#auth-error", friendlyError(error)); }
+$("#login-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const email=value("login-email").trim();
+  const password=value("login-password");
+  if (!email || !password) { text("#auth-error", "Escribe el correo y la contraseña."); return; }
+  setAuthBusy(true,"Verificando tus datos…");
+  try { await loginWithEmail(email,password); }
+  catch (error) { text("#auth-error", friendlyError(error)); }
+  finally { setAuthBusy(false); }
+});
+$("#reset-password").addEventListener("click", async () => {
+  const email=value("login-email").trim();
+  if (!email) { text("#auth-error", "Escribe primero tu correo para recibir el enlace."); return; }
+  setAuthBusy(true,"Enviando enlace…");
+  try { await resetAdminPassword(email); text("#auth-error", "Revisa tu correo: Firebase envió un enlace para crear o cambiar la contraseña."); }
+  catch (error) { text("#auth-error", friendlyError(error)); }
+  finally { setAuthBusy(false); }
 });
 $("#logout-button").addEventListener("click", logout);
 $("#save-content").addEventListener("click", persistContent);
@@ -98,6 +112,7 @@ async function persistProject() {
 }
 
 function setBusy(busy,message="") { document.querySelectorAll("button").forEach((button) => button.disabled=busy); if (message) text("#admin-message",message); }
+function setAuthBusy(busy,message="") { $("#login-button").disabled=busy; $("#reset-password").disabled=busy; if (message) text("#auth-error",message); }
 function value(id) { return document.getElementById(id).value; }
 function valueSet(id,value) { document.getElementById(id).value=value || ""; }
 function slug(value) { return value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,""); }
@@ -106,12 +121,13 @@ function attr(value="") { return html(value).replaceAll('"',"&quot;"); }
 function friendlyError(error) {
   console.error(error);
   const code=error?.code || "";
-  if (code.includes("popup-blocked")) return "El navegador bloqueó la ventana de Google. Permite las ventanas emergentes o abre el panel directamente en Chrome, Safari o Firefox.";
-  if (code.includes("popup-closed") || code.includes("cancelled-popup-request")) return "La ventana de Google se cerró antes de completar el acceso.";
-  if (code.includes("operation-not-supported-in-this-environment") || code.includes("web-storage-unsupported")) return "Este navegador integrado no permite el acceso con Google. Abre el panel directamente en Chrome, Safari o Firefox.";
-  if (code.includes("network-request-failed")) return "No se pudo conectar con Google. Comprueba tu conexión e inténtalo nuevamente.";
+  if (code.includes("invalid-credential") || code.includes("wrong-password") || code.includes("user-not-found")) return "El correo o la contraseña no son correctos.";
+  if (code.includes("invalid-email")) return "Escribe un correo electrónico válido.";
+  if (code.includes("too-many-requests")) return "Hubo demasiados intentos. Espera unos minutos antes de volver a probar.";
+  if (code.includes("operation-not-allowed")) return "El acceso con correo y contraseña todavía no está habilitado en Firebase.";
+  if (code.includes("network-request-failed")) return "No se pudo conectar con Firebase. Comprueba tu conexión e inténtalo nuevamente.";
   if (code.includes("unauthorized-domain")) return "Este dominio todavía no está autorizado en Firebase.";
   if (code.includes("permission-denied")) return "Firebase rechazó la operación. Revisa las reglas de seguridad.";
-  return "No se pudo completar la operación. Abre el panel en Chrome, Safari o Firefox e inténtalo nuevamente.";
+  return "No se pudo completar la operación. Comprueba los datos e inténtalo nuevamente.";
 }
 
