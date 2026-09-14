@@ -213,6 +213,12 @@ body { min-width: 280px; overflow-x: clip; }
 .auth-card h1 { margin:0; font:500 clamp(2.1rem,7vw,3.2rem)/1.05 Georgia,serif; }
 .auth-card p { color:#74635a; }
 .auth-card .button-primary { margin-top:16px; border:0; cursor:pointer; }
+.login-form { display:grid; gap:16px; margin-top:28px; text-align:left; }
+.login-form .admin-field { gap:7px; }
+.login-form input { min-height:50px; }
+.login-form .button-primary { width:100%; margin-top:4px; }
+.password-reset { justify-self:center; padding:4px; border:0; background:transparent; color:#85533f; font:700 .84rem/1.4 inherit; text-decoration:underline; text-underline-offset:3px; cursor:pointer; }
+.password-reset:disabled { opacity:.6; cursor:wait; }
 .auth-error { margin-top:18px; color:#a34338!important; }
 .admin-dialog { width:min(760px,calc(100% - 32px)); max-height:92dvh; overflow:auto; padding:clamp(24px,4vw,38px); border:1px solid #d9ccbd; border-radius:22px; color:var(--foreground); background:#fffdf9; box-shadow:0 30px 90px rgba(54,39,31,.28); }
 .admin-dialog-head { display:flex; justify-content:space-between; gap:20px; align-items:flex-start; margin-bottom:24px; }
@@ -229,3 +235,4 @@ body { min-width: 280px; overflow-x: clip; }
   .project-dialog { inset:0; width:100vw!important; height:100dvh!important; max-height:none; border:0; border-radius:0; transform:none!important; }
   .admin-dialog { width:100vw; max-height:100dvh; height:100dvh; border:0; border-radius:0; }
 }
+
