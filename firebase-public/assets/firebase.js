@@ -4,7 +4,7 @@ import {
   orderBy, query, setDoc, writeBatch,
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 import {
-  getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithRedirect, signOut,
+  getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut,
 } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
 
 const firebaseConfig = {
@@ -75,7 +75,7 @@ export function observeAuth(callback) {
 export async function loginWithGoogle() {
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ login_hint: ADMIN_EMAIL, prompt:"select_account" });
-  return signInWithRedirect(auth, provider);
+  return signInWithPopup(auth, provider);
 }
 
 export function logout() { return signOut(auth); }
