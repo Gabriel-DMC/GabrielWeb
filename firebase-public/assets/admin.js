@@ -1,7 +1,7 @@
 import {
   ADMIN_EMAIL, isAdmin, loadAdminData, loginWithGoogle, logout, observeAuth,
   removeProject, saveContent, saveProject, seedDefaultsIfEmpty,
-} from "./firebase.js";
+} from "./firebase.js?v=20260914-1";
 
 let state = { profile:{}, services:[], projects:[] };
 let draft = null;
@@ -103,4 +103,15 @@ function valueSet(id,value) { document.getElementById(id).value=value || ""; }
 function slug(value) { return value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,""); }
 function html(value="") { const node=document.createElement("span"); node.textContent=String(value); return node.innerHTML; }
 function attr(value="") { return html(value).replaceAll('"',"&quot;"); }
-function friendlyError(error) { console.error(error); const code=error?.code || ""; if (code.includes("popup-closed")) return "Se cerró la ventana de Google antes de completar el acceso."; if (code.includes("unauthorized-domain")) return "Este dominio todavía no está autorizado en Firebase."; if (code.includes("permission-denied")) return "Firebase rechazó la operación. Revisa las reglas de seguridad."; return "No se pudo completar la operación. Inténtalo nuevamente."; }
+function friendlyError(error) {
+  console.error(error);
+  const code=error?.code || "";
+  if (code.includes("popup-blocked")) return "El navegador bloqueó la ventana de Google. Permite las ventanas emergentes o abre el panel directamente en Chrome, Safari o Firefox.";
+  if (code.includes("popup-closed") || code.includes("cancelled-popup-request")) return "La ventana de Google se cerró antes de completar el acceso.";
+  if (code.includes("operation-not-supported-in-this-environment") || code.includes("web-storage-unsupported")) return "Este navegador integrado no permite el acceso con Google. Abre el panel directamente en Chrome, Safari o Firefox.";
+  if (code.includes("network-request-failed")) return "No se pudo conectar con Google. Comprueba tu conexión e inténtalo nuevamente.";
+  if (code.includes("unauthorized-domain")) return "Este dominio todavía no está autorizado en Firebase.";
+  if (code.includes("permission-denied")) return "Firebase rechazó la operación. Revisa las reglas de seguridad.";
+  return "No se pudo completar la operación. Abre el panel en Chrome, Safari o Firefox e inténtalo nuevamente.";
+}
+
