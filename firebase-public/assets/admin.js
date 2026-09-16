@@ -2,9 +2,13 @@ import {
   ADMIN_EMAIL, isAdmin, loadAdminData, loginWithEmail, logout, observeAuth,
   removeProject, resetAdminPassword, saveContent, saveProject, seedDefaultsIfEmpty,
 } from "./firebase.js?v=20260914-2";
+import { uploadProjectImage, validateProjectImage } from "./cloudinary.js?v=20260915-1";
 
 let state = { profile:{}, services:[], projects:[] };
 let draft = null;
+let selectedImage = null;
+let previewUrl = null;
+let savingProject = false;
 const $ = (selector) => document.querySelector(selector);
 const text = (selector, value) => { const node=$(selector); if (node) node.textContent=value; };
 
@@ -32,9 +36,12 @@ $("#new-service").addEventListener("click", () => {
   state.services.push({ id:crypto.randomUUID(), title:"", description:"", icon:"code", sortOrder:state.services.length + 1, active:true });
   renderServices();
 });
-$("#new-project").addEventListener("click", () => openProject({ id:crypto.randomUUID(), slug:"", title:"", shortDescription:"", description:"", status:"Demostración", technologies:[], coverImage:"/proyecto-restaurante.png", gallery:["/proyecto-restaurante.png"], projectUrl:"", published:true, sortOrder:state.projects.length + 1 }));
+$("#new-project").addEventListener("click", () => openProject({ id:crypto.randomUUID(), slug:"", title:"", shortDescription:"", description:"", status:"Demostración", technologies:[], coverImage:"", gallery:[], projectUrl:"", published:true, sortOrder:state.projects.length + 1 }));
 $("#project-cancel").addEventListener("click", () => $("#project-dialog").close());
 $("#project-save").addEventListener("click", persistProject);
+$("#project-image").addEventListener("change", selectProjectImage);
+$("#project-dialog").addEventListener("cancel", (event) => { if (savingProject) event.preventDefault(); });
+$("#project-dialog").addEventListener("close", clearImageSelection);
 
 document.querySelectorAll("[data-tab]").forEach((button) => button.addEventListener("click", () => {
   document.querySelectorAll("[data-tab]").forEach((item) => item.setAttribute("aria-selected", String(item === button)));
@@ -69,7 +76,7 @@ function renderServices() {
 }
 
 function renderProjects() {
-  $("#project-list").innerHTML=state.projects.length ? state.projects.map((project) => `<article data-project="${project.id}"><img src="${attr(project.coverImage || "/proyecto-restaurante.png")}" alt=""><div><span>${project.published ? "Publicado" : "Borrador"}</span><h3>${html(project.title)}</h3><p>${html(project.shortDescription)}</p></div><div class="project-admin-actions"><button type="button" data-edit>Editar</button><button type="button" class="danger" data-delete>Eliminar</button></div></article>`).join("") : `<p class="empty-state">Todavía no hay proyectos.</p>`;
+  $("#project-list").innerHTML=state.projects.length ? state.projects.map((project) => `<article data-project="${project.id}"><img src="${attr(project.coverImage || "/proyecto-restaurante.webp")}" alt=""><div><span>${project.published ? "Publicado" : "Borrador"}</span><h3>${html(project.title)}</h3><p>${html(project.shortDescription)}</p></div><div class="project-admin-actions"><button type="button" data-edit>Editar</button><button type="button" class="danger" data-delete>Eliminar</button></div></article>`).join("") : `<p class="empty-state">Todavía no hay proyectos.</p>`;
   $("#project-list").querySelectorAll("[data-project]").forEach((card) => {
     const project=state.projects.find((item) => item.id === card.dataset.project);
     card.querySelector("[data-edit]").addEventListener("click", () => openProject(project));
@@ -91,24 +98,82 @@ async function persistContent() {
 }
 
 function openProject(project) {
+  clearImageSelection();
   draft=structuredClone(project);
-  valueSet("project-title",draft.title); valueSet("project-status",draft.status); valueSet("project-short",draft.shortDescription); valueSet("project-description",draft.description); valueSet("project-tech",(draft.technologies || []).join(", ")); valueSet("project-url",draft.projectUrl); valueSet("project-image",draft.coverImage); $("#project-published").checked=draft.published !== false;
-  $("#project-preview").src=draft.coverImage || "/proyecto-restaurante.png";
+  valueSet("project-title",draft.title); valueSet("project-status",draft.status); valueSet("project-short",draft.shortDescription); valueSet("project-description",draft.description); valueSet("project-tech",(draft.technologies || []).join(", ")); valueSet("project-url",draft.projectUrl); $("#project-published").checked=draft.published !== false;
+  showProjectPreview(draft.coverImage);
+  text("#project-form-error", "");
+  text("#project-image-status", draft.coverImage ? "Imagen actual. Selecciona otra solo si quieres reemplazarla." : "Selecciona una imagen para este proyecto.");
   $("#project-dialog").showModal();
 }
 
+function clearImageSelection() {
+  selectedImage = null;
+  if (previewUrl) URL.revokeObjectURL(previewUrl);
+  previewUrl = null;
+  valueSet("project-image", "");
+}
+
+function showProjectPreview(url) {
+  $("#project-preview").hidden = !url;
+  if (url) $("#project-preview").src = url;
+  else $("#project-preview").removeAttribute("src");
+}
+
+function selectProjectImage() {
+  const file = $("#project-image").files[0];
+  if (!file) return;
+  text("#project-form-error", "");
+  try {
+    validateProjectImage(file);
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    selectedImage = file;
+    previewUrl = URL.createObjectURL(file);
+    showProjectPreview(previewUrl);
+    text("#project-image-status", `${file.name} · ${(file.size / 1024 / 1024).toFixed(2)} MB. Se subirá al guardar el proyecto.`);
+  } catch (error) {
+    clearImageSelection();
+    showProjectPreview(draft?.coverImage);
+    text("#project-image-status", "Selecciona otra imagen JPG, PNG o WebP de hasta 5 MB.");
+    text("#project-form-error", friendlyError(error));
+  }
+}
+
 async function persistProject() {
-  if (!draft) return;
+  if (!draft || savingProject) return;
   const title=value("project-title").trim(); const shortDescription=value("project-short").trim(); const description=value("project-description").trim();
   if (!title || !shortDescription || !description) { text("#project-form-error","Completa el nombre y las dos descripciones."); return; }
-  const coverImage=value("project-image").trim() || "/proyecto-restaurante.png";
-  draft={ ...draft, title, slug:slug(title), status:value("project-status"), shortDescription, description, technologies:value("project-tech").split(",").map((item) => item.trim()).filter(Boolean), projectUrl:value("project-url").trim(), coverImage, gallery:[coverImage], published:$("#project-published").checked };
+  if (!selectedImage && !draft.coverImage) { text("#project-form-error", "Selecciona una imagen para el proyecto."); return; }
+  text("#project-form-error", "");
+  draft={ ...draft, title, slug:slug(title), status:value("project-status"), shortDescription, description, technologies:value("project-tech").split(",").map((item) => item.trim()).filter(Boolean), projectUrl:value("project-url").trim(), published:$("#project-published").checked };
+  savingProject = true;
+  $("#project-dialog").querySelectorAll("input, textarea, select").forEach((field) => field.disabled = true);
+  $("#project-dialog").setAttribute("aria-busy", "true");
   setBusy(true,"Guardando proyecto…");
   try {
+    if (selectedImage) {
+      text("#project-image-status", "Subiendo imagen a Cloudinary…");
+      const image = await uploadProjectImage(selectedImage, (percent) => text("#project-image-status", percent === 100 ? "Carga enviada. Cloudinary está procesando la imagen…" : `Subiendo imagen: ${percent}%`));
+      draft.coverImage = image.url;
+      draft.gallery = [image.url];
+      draft.cloudinaryPublicId = image.publicId;
+      // Keep the uploaded URL if Firebase fails, so retrying does not upload twice.
+      clearImageSelection();
+      showProjectPreview(image.url);
+      text("#project-image-status", "Imagen subida. Guardando proyecto en Firebase…");
+    }
     await saveProject(draft);
     const index=state.projects.findIndex((item) => item.id === draft.id); if (index >= 0) state.projects[index]=draft; else state.projects.push(draft);
     state.projects.sort((a,b) => Number(a.sortOrder || 0)-Number(b.sortOrder || 0)); renderProjects(); $("#project-dialog").close(); text("#admin-message","Proyecto guardado correctamente.");
-  } catch (error) { text("#project-form-error",friendlyError(error)); } finally { setBusy(false); }
+  } catch (error) {
+    text("#project-form-error",friendlyError(error));
+    text("#project-image-status", selectedImage ? "La carga no se completó. Puedes volver a guardar para reintentarlo." : "La imagen se conserva. Vuelve a guardar para reintentar.");
+  } finally {
+    savingProject = false;
+    $("#project-dialog").querySelectorAll("input, textarea, select").forEach((field) => field.disabled = false);
+    $("#project-dialog").setAttribute("aria-busy", "false");
+    setBusy(false);
+  }
 }
 
 function setBusy(busy,message="") { document.querySelectorAll("button").forEach((button) => button.disabled=busy); if (message) text("#admin-message",message); }
@@ -121,6 +186,7 @@ function attr(value="") { return html(value).replaceAll('"',"&quot;"); }
 function friendlyError(error) {
   console.error(error);
   const code=error?.code || "";
+  if (code.startsWith("cloudinary/")) return error.message;
   if (code.includes("invalid-credential") || code.includes("wrong-password") || code.includes("user-not-found")) return "El correo o la contraseña no son correctos.";
   if (code.includes("invalid-email")) return "Escribe un correo electrónico válido.";
   if (code.includes("too-many-requests")) return "Hubo demasiados intentos. Espera unos minutos antes de volver a probar.";
