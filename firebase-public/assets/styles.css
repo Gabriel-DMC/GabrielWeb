@@ -225,9 +225,13 @@ body { min-width: 280px; overflow-x: clip; }
 .admin-dialog-head h2 { margin:0; font:500 1.9rem Georgia,serif; }
 .admin-dialog-head p { margin:5px 0 0; color:#806e64; }
 .admin-dialog-close { display:grid; place-items:center; flex:0 0 42px; width:42px; height:42px; border:1px solid #ded1c1; border-radius:50%; background:#fbf7f0; cursor:pointer; }
-.free-image-note { grid-column:1/-1; margin:0; padding:13px 15px; border-radius:12px; background:#f1f3ee; color:#667060; font-size:.82rem; }
+.image-upload-field { padding:18px; border:1px dashed #cfbca7; border-radius:16px; background:#faf5ed; }
+.image-upload-field input[type="file"] { width:100%; min-width:0; padding:10px; background:#fffdf9; font-size:.85rem; }
+.image-upload-field input::file-selector-button { margin-right:12px; padding:10px 14px; border:0; border-radius:9px; background:#eadbca; color:#644d3d; font:inherit; cursor:pointer; }
+.image-upload-field small { color:#77665a; line-height:1.6; }
+.image-upload-status { grid-column:1/-1; margin:0; padding:13px 15px; border-radius:12px; background:#f1f3ee; color:#667060; font-size:.82rem; overflow-wrap:anywhere; }
 .firebase-state { margin:0 0 18px; padding:11px 14px; border-radius:12px; background:#edf1e9; color:#596452; font-size:.84rem; }
-.project-cover-preview { width:100%; max-height:240px; object-fit:cover; border-radius:14px; background:#eee4d7; }
+.project-cover-preview { grid-column:1/-1; width:100%; max-height:300px; object-fit:contain; border-radius:14px; background:#eee4d7; }
 .admin-field input[type="url"] { direction:ltr; }
 .admin-signout { border:0; background:transparent; color:#85533f; font-size:.84rem; font-weight:700; font-family:inherit; cursor:pointer; }
 
