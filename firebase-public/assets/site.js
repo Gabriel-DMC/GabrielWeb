@@ -2,6 +2,10 @@ import { loadHomeData, loadPublishedProjects } from "./firebase.js?v=20260920-2"
 
 const iconMap = { store:"⌂", layout:"▦", devices:"▣", sparkles:"✦", code:"</>" };
 const text = (id, value) => { const node = document.getElementById(id); if (node && value != null) node.textContent = value; };
+let lightboxImages = [];
+let lightboxTitle = "";
+let lightboxIndex = 0;
+let lightboxReturnFocus = null;
 
 function setupNavigation() {
   const button = document.querySelector(".menu-button");
@@ -46,9 +50,15 @@ function renderProjects(projects) {
     dialog.style.setProperty("--dialog-y", `${rect.top + rect.height / 2 - innerHeight / 2}px`);
     dialog.style.setProperty("--dialog-sx", String(Math.max(.12, rect.width / width)));
     dialog.style.setProperty("--dialog-sy", String(Math.max(.12, rect.height / height)));
-    const images = project.gallery?.length ? project.gallery : [project.coverImage];
+    const images = (project.gallery?.length ? project.gallery : [project.coverImage]).filter(Boolean);
     const media = dialog.querySelector(".dialog-media");
-    media.innerHTML = images.map((src, i) => `<img src="${optimizedImage(src, { width:1400 })}" alt="${escapeHtml(project.title)}, imagen ${i + 1}" loading="${i === 0 ? "eager" : "lazy"}" decoding="async">`).join("");
+    const previews = images.slice(0, 3);
+    media.className = `dialog-media gallery-count-${Math.min(images.length, 3)}`;
+    media.innerHTML = previews.map((src, i) => {
+      const remaining = i === 2 && images.length > 3 ? `<span class="gallery-more">+${images.length - 3}</span>` : "";
+      return `<button type="button" class="gallery-tile" data-image-index="${i}" aria-label="Abrir imagen ${i + 1} de ${images.length}"><img src="${optimizedImage(src, { width:i ? 650 : 1200, height:i ? 440 : 900, crop:"fill" })}" alt="${escapeHtml(project.title)}, imagen ${i + 1}" loading="${i === 0 ? "eager" : "lazy"}" decoding="async">${remaining}<span class="gallery-open" aria-hidden="true">⤢</span></button>`;
+    }).join("");
+    media.querySelectorAll(".gallery-tile").forEach((tile) => tile.addEventListener("click", () => openLightbox(images, project.title, Number(tile.dataset.imageIndex), tile)));
     text("dialog-status", project.status); text("dialog-title", project.title); text("dialog-description", project.description);
     dialog.querySelector(".technology-list").innerHTML = (project.technologies || []).map((technology) => `<span>${escapeHtml(technology)}</span>`).join("");
     dialog.querySelector(".dialog-action").innerHTML = project.projectUrl
@@ -61,6 +71,71 @@ function renderProjects(projects) {
   }));
   dialog.querySelector(".dialog-close")?.addEventListener("click", () => dialog.close());
   dialog.addEventListener("click", (event) => { if (event.target === dialog) dialog.close(); });
+}
+
+function setupLightbox() {
+  const lightbox = document.getElementById("project-lightbox");
+  if (!lightbox) return;
+  lightbox.querySelector(".lightbox-close")?.addEventListener("click", closeLightbox);
+  lightbox.querySelector(".lightbox-previous")?.addEventListener("click", () => moveLightbox(-1));
+  lightbox.querySelector(".lightbox-next")?.addEventListener("click", () => moveLightbox(1));
+  let touchStartX = 0;
+  const image = lightbox.querySelector(".lightbox-image");
+  image?.addEventListener("touchstart", (event) => { touchStartX = event.changedTouches[0]?.clientX || 0; }, { passive:true });
+  image?.addEventListener("touchend", (event) => {
+    const distance = (event.changedTouches[0]?.clientX || 0) - touchStartX;
+    if (Math.abs(distance) > 50) moveLightbox(distance > 0 ? -1 : 1);
+  }, { passive:true });
+  document.addEventListener("keydown", (event) => {
+    if (lightbox.hidden) return;
+    if (event.key === "Escape") { event.preventDefault(); closeLightbox(); }
+    if (event.key === "ArrowLeft") moveLightbox(-1);
+    if (event.key === "ArrowRight") moveLightbox(1);
+  });
+}
+
+function openLightbox(images, title, index, trigger) {
+  const lightbox = document.getElementById("project-lightbox");
+  if (!lightbox || !images.length) return;
+  lightboxImages = images;
+  lightboxTitle = title;
+  lightboxIndex = Math.max(0, Math.min(index, images.length - 1));
+  lightboxReturnFocus = trigger;
+  lightbox.hidden = false;
+  updateLightbox();
+  lightbox.querySelector(".lightbox-close")?.focus({ preventScroll:true });
+}
+
+function closeLightbox() {
+  const lightbox = document.getElementById("project-lightbox");
+  if (!lightbox) return;
+  lightbox.hidden = true;
+  lightboxReturnFocus?.focus({ preventScroll:true });
+}
+
+function moveLightbox(direction) {
+  if (lightboxImages.length < 2) return;
+  lightboxIndex = (lightboxIndex + direction + lightboxImages.length) % lightboxImages.length;
+  updateLightbox();
+}
+
+function updateLightbox() {
+  const lightbox = document.getElementById("project-lightbox");
+  if (!lightbox) return;
+  const image = lightbox.querySelector(".lightbox-image");
+  image.src = optimizedImage(lightboxImages[lightboxIndex], { width:1800 });
+  image.alt = `${lightboxTitle}, imagen ${lightboxIndex + 1} de ${lightboxImages.length}`;
+  lightbox.querySelector(".lightbox-counter").textContent = `${lightboxIndex + 1} / ${lightboxImages.length}`;
+  const single = lightboxImages.length < 2;
+  lightbox.querySelector(".lightbox-previous").hidden = single;
+  lightbox.querySelector(".lightbox-next").hidden = single;
+  const thumbnails = lightbox.querySelector(".lightbox-thumbnails");
+  thumbnails.innerHTML = lightboxImages.map((src, index) => `<button type="button" data-lightbox-index="${index}" class="${index === lightboxIndex ? "is-active" : ""}" aria-label="Ver imagen ${index + 1}"><img src="${optimizedImage(src, { width:180, height:120, crop:"fill" })}" alt="" loading="lazy"></button>`).join("");
+  thumbnails.querySelectorAll("button").forEach((button) => button.addEventListener("click", () => {
+    lightboxIndex = Number(button.dataset.lightboxIndex);
+    updateLightbox();
+  }));
+  thumbnails.querySelector(".is-active")?.scrollIntoView({ block:"nearest", inline:"center" });
 }
 
 function escapeHtml(value="") { const span=document.createElement("span"); span.textContent=String(value); return span.innerHTML; }
@@ -85,6 +160,7 @@ function renderProjectsError() {
 }
 
 setupNavigation();
+setupLightbox();
 if (document.body.dataset.page === "home") {
   const data = await loadHomeData();
   renderHome(data.profile, data.services);
