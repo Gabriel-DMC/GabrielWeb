@@ -39,33 +39,34 @@ export const defaultServices = [
   { id:"service-improvements", title:"Mejoras y mantenimiento", description:"Organización de contenido, ajustes visuales y mejoras funcionales en proyectos existentes.", icon:"sparkles", sortOrder:4, active:true },
 ];
 
-export const defaultProjects = [
-  { id:"demo-restaurante", slug:"restaurante-calido", title:"Restaurante cálido", shortDescription:"Sitio gastronómico con menú, horarios y reserva destacada.", description:"Demostración de una página para un restaurante local. La propuesta organiza la identidad del negocio, presenta su menú y facilita que los visitantes encuentren horarios, ubicación y opciones de reserva.", status:"Demostración", technologies:["HTML","CSS","JavaScript"], coverImage:"/proyecto-restaurante.webp", gallery:["/proyecto-restaurante.webp"], projectUrl:"", published:true, sortOrder:1 },
-  { id:"demo-tienda", slug:"tienda-esencial", title:"Tienda Esencial", shortDescription:"Catálogo visual para una tienda de ropa contemporánea.", description:"Proyecto académico enfocado en presentar prendas y colecciones de forma clara. El diseño prioriza las imágenes, las categorías y una navegación sencilla desde cualquier dispositivo.", status:"Proyecto académico", technologies:["HTML","CSS","JavaScript"], coverImage:"/proyecto-tienda.webp", gallery:["/proyecto-tienda.webp"], projectUrl:"", published:true, sortOrder:2 },
-  { id:"demo-barberia", slug:"barberia-clasica", title:"Barbería Clásica", shortDescription:"Presentación de servicios, horarios y reserva de turnos.", description:"Demostración de un sitio para barbería con una estética cuidada, servicios destacados y acceso rápido a la información necesaria para solicitar un turno.", status:"Demostración", technologies:["HTML","CSS","JavaScript"], coverImage:"/proyecto-barberia.webp", gallery:["/proyecto-barberia.webp"], projectUrl:"", published:true, sortOrder:3 },
-];
+// Los proyectos pertenecen solamente a Firebase. Una lista vacía es un
+// estado válido y no debe volver a crear demostraciones que el administrador
+// ya eliminó.
+export const defaultProjects = [];
 
 const byOrder = (a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0);
 const rows = (snapshot) => snapshot.docs.map((item) => ({ id:item.id, ...item.data() }));
 
-export async function loadPublicData() {
+export async function loadHomeData() {
   try {
-    const [profileSnap, serviceSnap, projectSnap] = await Promise.all([
+    const [profileSnap, serviceSnap] = await Promise.all([
       getDoc(doc(db, "site", "main")),
       getDocs(query(collection(db, "services"), orderBy("sortOrder"))),
-      getDocs(query(collection(db, "publishedProjects"), orderBy("sortOrder"))),
     ]);
     const services = rows(serviceSnap);
-    const projects = rows(projectSnap);
     return {
       profile: profileSnap.exists() ? { ...defaultProfile, ...profileSnap.data() } : defaultProfile,
       services: services.length ? services : defaultServices,
-      projects: projects.length ? projects : defaultProjects,
     };
   } catch (error) {
     console.warn("Firebase no está disponible; se muestra el contenido incluido.", error);
-    return { profile:defaultProfile, services:defaultServices, projects:defaultProjects };
+    return { profile:defaultProfile, services:defaultServices };
   }
+}
+
+export async function loadPublishedProjects() {
+  const snapshot = await getDocs(query(collection(db, "publishedProjects"), orderBy("sortOrder")));
+  return rows(snapshot).sort(byOrder);
 }
 
 export function observeAuth(callback) {
@@ -94,7 +95,7 @@ export async function loadAdminData() {
   return {
     profile: profileSnap.exists() ? { ...defaultProfile, ...profileSnap.data() } : { ...defaultProfile },
     services: services.length ? services : structuredClone(defaultServices),
-    projects: projects.length ? projects : structuredClone(defaultProjects),
+    projects,
   };
 }
 
@@ -104,10 +105,6 @@ export async function seedDefaultsIfEmpty() {
   const batch = writeBatch(db);
   batch.set(doc(db, "site", "main"), { ...defaultProfile, updatedAt:Date.now() });
   defaultServices.forEach((service) => batch.set(doc(db, "services", service.id), service));
-  defaultProjects.forEach((project) => {
-    batch.set(doc(db, "projects", project.id), project);
-    batch.set(doc(db, "publishedProjects", project.id), project);
-  });
   await batch.commit();
 }
 
