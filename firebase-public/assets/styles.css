@@ -207,6 +207,12 @@ body { min-width: 280px; overflow-x: clip; }
 .dialog-close { border:1px solid #dfd1c1; }
 .loading-note { margin:30px 0; color:#7c6b61; }
 .empty-state { grid-column:1/-1; padding:48px; border:1px dashed #d7c8b8; border-radius:24px; text-align:center; color:#78665b; }
+.project-skeleton { min-height:410px; overflow:hidden; padding:0 24px 26px; border:1px solid #e2d7ca; border-radius:26px; background:#fffdf9; }
+.project-skeleton span,.project-skeleton i { display:block; border-radius:12px; background:linear-gradient(100deg,#eee5da 25%,#f8f2e9 45%,#eee5da 65%); background-size:220% 100%; animation:project-loading 1.25s ease-in-out infinite; }
+.project-skeleton span { height:285px; margin:0 -24px 24px; border-radius:0; }
+.project-skeleton i { width:55%; height:19px; margin-top:12px; }
+.project-skeleton i:last-child { width:82%; height:13px; }
+@keyframes project-loading { to { background-position-x:-220%; } }
 .auth-shell { min-height:100dvh; display:grid; place-items:center; padding:24px; background:#f5efe6; }
 .auth-card { width:min(500px,100%); padding:clamp(28px,6vw,54px); border:1px solid #ddcfbf; border-radius:28px; background:#fffdf9; box-shadow:0 26px 70px rgba(79,57,46,.12); text-align:center; }
 .auth-card .brand-mark { margin:0 auto 24px; }
@@ -247,6 +253,11 @@ body { min-width: 280px; overflow-x: clip; }
 
 @media (max-width:680px) {
   .project-dialog { inset:0; width:100vw!important; height:100dvh!important; max-height:none; border:0; border-radius:0; transform:none!important; }
+  .project-dialog[open] { display:block; }
+  .dialog-media { min-height:54vw; max-height:none; overflow:visible; }
+  .dialog-media img { display:block; height:auto; max-height:none; }
+  .project-skeleton { min-height:340px; }
+  .project-skeleton span { height:220px; }
   .admin-dialog { width:100vw; max-height:100dvh; height:100dvh; border:0; border-radius:0; }
   .project-image-editor { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .project-image-actions { grid-template-columns:1fr; }
