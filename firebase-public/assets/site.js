@@ -1,4 +1,4 @@
-import { loadPublicData } from "./firebase.js";
+import { loadHomeData, loadPublishedProjects } from "./firebase.js?v=20260920-2";
 
 const iconMap = { store:"⌂", layout:"▦", devices:"▣", sparkles:"✦", code:"</>" };
 const text = (id, value) => { const node = document.getElementById(id); if (node && value != null) node.textContent = value; };
@@ -31,10 +31,11 @@ function renderProjects(projects) {
   const grid = document.getElementById("projects-grid");
   const dialog = document.getElementById("project-dialog");
   if (!grid || !dialog) return;
+  grid.setAttribute("aria-busy", "false");
   if (!projects.length) { grid.innerHTML = `<p class="empty-state">Todavía no hay proyectos publicados.</p>`; return; }
   grid.innerHTML = projects.map((project, index) => `
     <button class="project-card" data-project="${escapeHtml(project.id)}" aria-label="Ver detalles de ${escapeHtml(project.title)}">
-      <div class="project-image-wrap"><img src="${safeImage(project.coverImage)}" alt="Vista previa de ${escapeHtml(project.title)}" ${index > 1 ? 'loading="lazy"' : ''}><span>0${index + 1}</span></div>
+      <div class="project-image-wrap"><img src="${optimizedImage(project.coverImage, { width:900, height:560, crop:"fill" })}" alt="Vista previa de ${escapeHtml(project.title)}" width="900" height="560" loading="${index === 0 ? "eager" : "lazy"}" decoding="async" ${index === 0 ? 'fetchpriority="high"' : ''}><span>${String(index + 1).padStart(2, "0")}</span></div>
       <div class="project-card-copy"><div><small>${escapeHtml(project.status)}</small><h2>${escapeHtml(project.title)}</h2><p>${escapeHtml(project.shortDescription)}</p></div><span class="project-open">Ver proyecto ↗</span></div>
     </button>`).join("");
   grid.querySelectorAll(".project-card").forEach((card) => card.addEventListener("click", () => {
@@ -46,13 +47,17 @@ function renderProjects(projects) {
     dialog.style.setProperty("--dialog-sx", String(Math.max(.12, rect.width / width)));
     dialog.style.setProperty("--dialog-sy", String(Math.max(.12, rect.height / height)));
     const images = project.gallery?.length ? project.gallery : [project.coverImage];
-    dialog.querySelector(".dialog-media").innerHTML = images.map((src, i) => `<img src="${safeImage(src)}" alt="${escapeHtml(project.title)}, imagen ${i + 1}" ${i ? 'loading="lazy"' : ''}>`).join("");
+    const media = dialog.querySelector(".dialog-media");
+    media.innerHTML = images.map((src, i) => `<img src="${optimizedImage(src, { width:1400 })}" alt="${escapeHtml(project.title)}, imagen ${i + 1}" loading="${i === 0 ? "eager" : "lazy"}" decoding="async">`).join("");
     text("dialog-status", project.status); text("dialog-title", project.title); text("dialog-description", project.description);
     dialog.querySelector(".technology-list").innerHTML = (project.technologies || []).map((technology) => `<span>${escapeHtml(technology)}</span>`).join("");
     dialog.querySelector(".dialog-action").innerHTML = project.projectUrl
       ? `<a class="button-primary dialog-link" href="${safeUrl(project.projectUrl)}" target="_blank" rel="noreferrer">Visitar proyecto ↗</a>`
       : `<div class="demo-note"><span>Este es un proyecto académico o demostrativo. El enlace público se agregará cuando esté disponible.</span></div>`;
+    dialog.scrollTop = 0;
+    media.scrollTop = 0;
     dialog.showModal();
+    requestAnimationFrame(() => { dialog.scrollTop = 0; media.scrollTop = 0; });
   }));
   dialog.querySelector(".dialog-close")?.addEventListener("click", () => dialog.close());
   dialog.addEventListener("click", (event) => { if (event.target === dialog) dialog.close(); });
@@ -61,8 +66,36 @@ function renderProjects(projects) {
 function escapeHtml(value="") { const span=document.createElement("span"); span.textContent=String(value); return span.innerHTML; }
 function safeUrl(value="") { try { const url=new URL(value); return ["http:","https:"].includes(url.protocol) ? url.href : "#"; } catch { return "#"; } }
 function safeImage(value="") { return value.startsWith("/") ? value : safeUrl(value); }
+function optimizedImage(value="", { width=1200, height, crop="limit" }={}) {
+  const safe = safeImage(value);
+  try {
+    const url = new URL(safe, location.origin);
+    if (url.hostname !== "res.cloudinary.com" || !url.pathname.includes("/image/upload/")) return safe;
+    const dimensions = [`w_${width}`, height ? `h_${height}` : "", `c_${crop}`].filter(Boolean).join(",");
+    url.pathname = url.pathname.replace("/image/upload/", `/image/upload/f_auto,q_auto:eco,dpr_auto,${dimensions}/`);
+    return url.href;
+  } catch { return safe; }
+}
+
+function renderProjectsError() {
+  const grid = document.getElementById("projects-grid");
+  if (!grid) return;
+  grid.setAttribute("aria-busy", "false");
+  grid.innerHTML = `<p class="empty-state">No fue posible cargar los proyectos en este momento. Inténtalo nuevamente en unos segundos.</p>`;
+}
 
 setupNavigation();
-const data = await loadPublicData();
-if (document.body.dataset.page === "home") renderHome(data.profile, data.services);
-if (document.body.dataset.page === "projects") renderProjects(data.projects.filter((item) => item.published !== false));
+if (document.body.dataset.page === "home") {
+  const data = await loadHomeData();
+  renderHome(data.profile, data.services);
+}
+if (document.body.dataset.page === "projects") {
+  try {
+    const projects = await loadPublishedProjects();
+    renderProjects(projects.filter((item) => item.published !== false));
+  } catch (error) {
+    console.warn("No fue posible cargar los proyectos publicados.", error);
+    renderProjectsError();
+  }
+}
+
