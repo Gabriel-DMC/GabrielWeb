@@ -1,7 +1,7 @@
 import {
   ADMIN_EMAIL, isAdmin, loadAdminData, loginWithEmail, logout, observeAuth,
   removeProject, resetAdminPassword, saveContent, saveProject, seedDefaultsIfEmpty,
-} from "./firebase.js?v=20260914-2";
+} from "./firebase.js?v=20260920-2";
 import { uploadProjectImage, validateProjectImage } from "./cloudinary.js?v=20260915-1";
 
 let state = { profile:{}, services:[], projects:[] };
@@ -76,7 +76,7 @@ function renderServices() {
 }
 
 function renderProjects() {
-  $("#project-list").innerHTML=state.projects.length ? state.projects.map((project) => `<article data-project="${project.id}"><img src="${attr(project.coverImage || "/proyecto-restaurante.webp")}" alt=""><div><span>${project.published ? "Publicado" : "Borrador"}</span><h3>${html(project.title)}</h3><p>${html(project.shortDescription)}</p></div><div class="project-admin-actions"><button type="button" data-edit>Editar</button><button type="button" class="danger" data-delete>Eliminar</button></div></article>`).join("") : `<p class="empty-state">Todavía no hay proyectos.</p>`;
+  $("#project-list").innerHTML=state.projects.length ? state.projects.map((project) => `<article data-project="${project.id}"><img src="${attr(project.coverImage || "/favicon.svg")}" alt=""><div><span>${project.published ? "Publicado" : "Borrador"}</span><h3>${html(project.title)}</h3><p>${html(project.shortDescription)}</p></div><div class="project-admin-actions"><button type="button" data-edit>Editar</button><button type="button" class="danger" data-delete>Eliminar</button></div></article>`).join("") : `<p class="empty-state">Todavía no hay proyectos.</p>`;
   $("#project-list").querySelectorAll("[data-project]").forEach((card) => {
     const project=state.projects.find((item) => item.id === card.dataset.project);
     card.querySelector("[data-edit]").addEventListener("click", () => openProject(project));
