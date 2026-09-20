@@ -6,8 +6,8 @@ import { uploadProjectImage, validateProjectImage } from "./cloudinary.js?v=2026
 
 let state = { profile:{}, services:[], projects:[] };
 let draft = null;
-let selectedImage = null;
-let previewUrl = null;
+let galleryItems = [];
+let coverItemId = "";
 let savingProject = false;
 const $ = (selector) => document.querySelector(selector);
 const text = (selector, value) => { const node=$(selector); if (node) node.textContent=value; };
@@ -39,9 +39,9 @@ $("#new-service").addEventListener("click", () => {
 $("#new-project").addEventListener("click", () => openProject({ id:crypto.randomUUID(), slug:"", title:"", shortDescription:"", description:"", status:"Demostración", technologies:[], coverImage:"", gallery:[], projectUrl:"", published:true, sortOrder:state.projects.length + 1 }));
 $("#project-cancel").addEventListener("click", () => $("#project-dialog").close());
 $("#project-save").addEventListener("click", persistProject);
-$("#project-image").addEventListener("change", selectProjectImage);
+$("#project-image").addEventListener("change", selectProjectImages);
 $("#project-dialog").addEventListener("cancel", (event) => { if (savingProject) event.preventDefault(); });
-$("#project-dialog").addEventListener("close", clearImageSelection);
+$("#project-dialog").addEventListener("close", clearGalleryEditor);
 
 document.querySelectorAll("[data-tab]").forEach((button) => button.addEventListener("click", () => {
   document.querySelectorAll("[data-tab]").forEach((item) => item.setAttribute("aria-selected", String(item === button)));
@@ -98,79 +98,121 @@ async function persistContent() {
 }
 
 function openProject(project) {
-  clearImageSelection();
+  clearGalleryEditor();
   draft=structuredClone(project);
   valueSet("project-title",draft.title); valueSet("project-status",draft.status); valueSet("project-short",draft.shortDescription); valueSet("project-description",draft.description); valueSet("project-tech",(draft.technologies || []).join(", ")); valueSet("project-url",draft.projectUrl); $("#project-published").checked=draft.published !== false;
-  showProjectPreview(draft.coverImage);
+  const publicIds=new Map((draft.galleryAssets || []).map((item) => [item.url,item.publicId]));
+  const urls=[draft.coverImage,...(draft.gallery || [])].filter((url,index,list) => url && list.indexOf(url) === index);
+  galleryItems=urls.map((url,index) => ({ id:`saved-${index}`, url, publicId:publicIds.get(url) || (url === draft.coverImage ? draft.cloudinaryPublicId || "" : ""), file:null, previewUrl:null }));
+  coverItemId=galleryItems.find((item) => item.url === draft.coverImage)?.id || galleryItems[0]?.id || "";
   text("#project-form-error", "");
-  text("#project-image-status", draft.coverImage ? "Imagen actual. Selecciona otra solo si quieres reemplazarla." : "Selecciona una imagen para este proyecto.");
+  renderImageGallery();
   $("#project-dialog").showModal();
 }
 
-function clearImageSelection() {
-  selectedImage = null;
-  if (previewUrl) URL.revokeObjectURL(previewUrl);
-  previewUrl = null;
+function clearGalleryEditor() {
+  galleryItems.forEach((item) => { if (item.previewUrl) URL.revokeObjectURL(item.previewUrl); });
+  galleryItems=[];
+  coverItemId="";
   valueSet("project-image", "");
 }
 
-function showProjectPreview(url) {
-  $("#project-preview").hidden = !url;
-  if (url) $("#project-preview").src = url;
-  else $("#project-preview").removeAttribute("src");
+function renderImageGallery() {
+  const gallery=$("#project-image-gallery");
+  if (!galleryItems.length) {
+    gallery.innerHTML='<p class="project-image-empty">Todavía no hay imágenes. Selecciona al menos una para guardar el proyecto.</p>';
+    text("#project-image-status", "Selecciona una o varias imágenes para el proyecto.");
+    return;
+  }
+  gallery.innerHTML=galleryItems.map((item,index) => {
+    const isCover=item.id === coverItemId;
+    const source=item.previewUrl || item.url;
+    const name=item.file?.name || `Imagen ${index + 1}`;
+    return `<article class="project-image-item ${isCover ? "is-cover" : ""}" data-image-id="${attr(item.id)}"><img src="${attr(source)}" alt="${attr(name)}">${isCover ? '<span class="project-image-badge">Portada</span>' : ""}<div class="project-image-actions">${isCover ? '<button type="button" disabled>Portada actual</button>' : '<button type="button" data-cover>Usar como portada</button>'}<button type="button" class="remove-image" data-remove-image>Quitar</button></div></article>`;
+  }).join("");
+  gallery.querySelectorAll("[data-image-id]").forEach((card) => {
+    card.querySelector("[data-cover]")?.addEventListener("click", () => { coverItemId=card.dataset.imageId; renderImageGallery(); });
+    card.querySelector("[data-remove-image]").addEventListener("click", () => removeGalleryImage(card.dataset.imageId));
+  });
+  const pending=galleryItems.filter((item) => item.file).length;
+  text("#project-image-status", `${galleryItems.length} ${galleryItems.length === 1 ? "imagen" : "imágenes"} en el proyecto${pending ? `; ${pending} ${pending === 1 ? "pendiente de subir" : "pendientes de subir"}` : ""}. Elige cuál será la portada.`);
 }
 
-function selectProjectImage() {
-  const file = $("#project-image").files[0];
-  if (!file) return;
+function removeGalleryImage(id) {
+  const index=galleryItems.findIndex((item) => item.id === id);
+  if (index < 0) return;
+  const [removed]=galleryItems.splice(index,1);
+  if (removed.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+  if (coverItemId === id) coverItemId=galleryItems[0]?.id || "";
+  renderImageGallery();
+}
+
+function selectProjectImages() {
+  const files=[...$("#project-image").files];
+  if (!files.length) return;
   text("#project-form-error", "");
-  try {
-    validateProjectImage(file);
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    selectedImage = file;
-    previewUrl = URL.createObjectURL(file);
-    showProjectPreview(previewUrl);
-    text("#project-image-status", `${file.name} · ${(file.size / 1024 / 1024).toFixed(2)} MB. Se subirá al guardar el proyecto.`);
-  } catch (error) {
-    clearImageSelection();
-    showProjectPreview(draft?.coverImage);
-    text("#project-image-status", "Selecciona otra imagen JPG, PNG o WebP de hasta 5 MB.");
-    text("#project-form-error", friendlyError(error));
-  }
+  const errors=[];
+  let added=0;
+  files.forEach((file) => {
+    try {
+      validateProjectImage(file);
+      const duplicate=galleryItems.some((item) => item.file && item.file.name === file.name && item.file.size === file.size && item.file.lastModified === file.lastModified);
+      if (duplicate) return;
+      const item={ id:crypto.randomUUID(), url:"", publicId:"", file, previewUrl:URL.createObjectURL(file) };
+      galleryItems.push(item);
+      if (!coverItemId) coverItemId=item.id;
+      added++;
+    } catch (error) { errors.push(friendlyError(error)); }
+  });
+  valueSet("project-image", "");
+  renderImageGallery();
+  if (errors.length) text("#project-form-error", [...new Set(errors)].join(" "));
+  else if (!added) text("#project-form-error", "Las imágenes seleccionadas ya están en la galería.");
 }
 
 async function persistProject() {
   if (!draft || savingProject) return;
   const title=value("project-title").trim(); const shortDescription=value("project-short").trim(); const description=value("project-description").trim();
   if (!title || !shortDescription || !description) { text("#project-form-error","Completa el nombre y las dos descripciones."); return; }
-  if (!selectedImage && !draft.coverImage) { text("#project-form-error", "Selecciona una imagen para el proyecto."); return; }
+  if (!galleryItems.length) { text("#project-form-error", "El proyecto debe conservar al menos una imagen."); return; }
   text("#project-form-error", "");
   draft={ ...draft, title, slug:slug(title), status:value("project-status"), shortDescription, description, technologies:value("project-tech").split(",").map((item) => item.trim()).filter(Boolean), projectUrl:value("project-url").trim(), published:$("#project-published").checked };
-  savingProject = true;
-  $("#project-dialog").querySelectorAll("input, textarea, select").forEach((field) => field.disabled = true);
+  savingProject=true;
+  $("#project-dialog").querySelectorAll("input, textarea, select").forEach((field) => field.disabled=true);
   $("#project-dialog").setAttribute("aria-busy", "true");
   setBusy(true,"Guardando proyecto…");
   try {
-    if (selectedImage) {
-      text("#project-image-status", "Subiendo imagen a Cloudinary…");
-      const image = await uploadProjectImage(selectedImage, (percent) => text("#project-image-status", percent === 100 ? "Carga enviada. Cloudinary está procesando la imagen…" : `Subiendo imagen: ${percent}%`));
-      draft.coverImage = image.url;
-      draft.gallery = [image.url];
-      draft.cloudinaryPublicId = image.publicId;
-      // Keep the uploaded URL if Firebase fails, so retrying does not upload twice.
-      clearImageSelection();
-      showProjectPreview(image.url);
-      text("#project-image-status", "Imagen subida. Guardando proyecto en Firebase…");
+    const pendingTotal=galleryItems.filter((item) => item.file).length;
+    let uploaded=0;
+    for (const item of galleryItems) {
+      if (!item.file) continue;
+      const number=uploaded + 1;
+      text("#project-image-status", `Subiendo imagen ${number} de ${pendingTotal}…`);
+      const image=await uploadProjectImage(item.file, (percent) => text("#project-image-status", `Subiendo imagen ${number} de ${pendingTotal}: ${percent}%`));
+      item.url=image.url;
+      item.publicId=image.publicId;
+      item.file=null;
+      if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      item.previewUrl=null;
+      uploaded++;
+      renderImageGallery();
     }
+    const coverItem=galleryItems.find((item) => item.id === coverItemId) || galleryItems[0];
+    draft.coverImage=coverItem.url;
+    draft.gallery=galleryItems.map((item) => item.url);
+    draft.galleryAssets=galleryItems.filter((item) => item.publicId).map((item) => ({ url:item.url, publicId:item.publicId }));
+    delete draft.cloudinaryPublicId;
+    if (coverItem.publicId) draft.cloudinaryPublicId=coverItem.publicId;
+    text("#project-image-status", "Imágenes listas. Guardando proyecto en Firebase…");
     await saveProject(draft);
     const index=state.projects.findIndex((item) => item.id === draft.id); if (index >= 0) state.projects[index]=draft; else state.projects.push(draft);
     state.projects.sort((a,b) => Number(a.sortOrder || 0)-Number(b.sortOrder || 0)); renderProjects(); $("#project-dialog").close(); text("#admin-message","Proyecto guardado correctamente.");
   } catch (error) {
     text("#project-form-error",friendlyError(error));
-    text("#project-image-status", selectedImage ? "La carga no se completó. Puedes volver a guardar para reintentarlo." : "La imagen se conserva. Vuelve a guardar para reintentar.");
+    text("#project-image-status", "Las imágenes que terminaron de subir se conservarán al reintentar.");
   } finally {
-    savingProject = false;
-    $("#project-dialog").querySelectorAll("input, textarea, select").forEach((field) => field.disabled = false);
+    savingProject=false;
+    $("#project-dialog").querySelectorAll("input, textarea, select").forEach((field) => field.disabled=false);
     $("#project-dialog").setAttribute("aria-busy", "false");
     setBusy(false);
   }
